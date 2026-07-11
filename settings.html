@@ -1,0 +1,78 @@
+<div class="context-usage-meter-settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>Context Usage Meter</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+
+            <label class="checkbox_label" for="cum_enabled">
+                <input id="cum_enabled" type="checkbox" />
+                <span>เปิดใช้งานหลอดวัด context</span>
+            </label>
+
+            <label class="checkbox_label" for="cum_toast">
+                <input id="cum_toast" type="checkbox" />
+                <span>เตือน เมื่อพรอมท์ล้ำโซนคำตอบ</span>
+            </label>
+
+            <hr>
+
+            <label for="cum_threshold">เตือนเหลือง เมื่อใช้ถึง (% ของ context)</label>
+            <input id="cum_threshold" class="text_pole" type="number" min="10" max="99" step="1" />
+
+            <label for="cum_reserve">Response Reserve, token — 0 = อ่านจาก ST</label>
+            <input id="cum_reserve" class="text_pole" type="number" min="0" step="16" />
+
+            <label for="cum_theme">ชุดสีหลอด</label>
+            <select id="cum_theme" class="text_pole">
+                <option value="basic">เบสิค (เขียว/ส้ม/แดง)</option>
+                <option value="sakura">ม่วงชมพู (น่ารัก)</option>
+                <option value="mint">มินต์</option>
+                <option value="peach">พีช</option>
+                <option value="cottoncandy">ค็อตตอนแคนดี้</option>
+                <option value="galaxy">กาแล็กซี</option>
+                <option value="neon">นีออน</option>
+                <option value="pastel">พาสเทล</option>
+                <option value="ocean">โอเชียน</option>
+                <option value="mono">โมโนโครม</option>
+                <option value="custom">กำหนดเอง (custom)</option>
+            </select>
+
+            <div id="cum_custom_colors" style="display:none; margin-top:6px;">
+                <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+                    <label style="display:flex; align-items:center; gap:5px;"><input id="cum_c_prompt" type="color" /> พรอมท์</label>
+                    <label style="display:flex; align-items:center; gap:5px;"><input id="cum_c_reserve" type="color" /> กันไว้ตอบ</label>
+                    <label style="display:flex; align-items:center; gap:5px;"><input id="cum_c_over" type="color" /> ล้น</label>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px;">
+                    <input id="cum_save_name" class="text_pole" type="text" placeholder="ตั้งชื่อชุดสี" style="max-width:140px;" />
+                    <input id="cum_save_btn" class="menu_button" type="button" value="บันทึกชุดนี้" />
+                </div>
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:4px;">
+                    <select id="cum_saved" class="text_pole" style="max-width:160px;"></select>
+                    <input id="cum_del_btn" class="menu_button" type="button" value="ลบ" />
+                </div>
+                <small>เลือกจากรายการเพื่อโหลดชุดสี · ปุ่มลบ = ลบชุดที่เลือกอยู่</small>
+            </div>
+
+            <hr>
+
+            <div>
+                <small id="cum_live">breakdown จะแสดงหลังส่งข้อความรอบแรก</small>
+            </div>
+
+            <div style="margin-top:8px;">
+                <input id="cum_compact_btn" class="menu_button" type="button" value="สรุปเนื้อหาทั้งหมด (EN+TH)" />
+                <input id="cum_reopen_btn" class="menu_button" type="button" value="เปิดสรุปล่าสุด" />
+            </div>
+
+            <hr>
+            <div style="text-align:center; opacity:.75;">
+                <small>Context Usage Meter · made by <b>POPKO</b></small><br>
+                <small>Summarizer (Recap) prompt by <b>xo.nara</b></small>
+            </div>
+
+        </div>
+    </div>
+</div>

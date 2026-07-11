@@ -1,0 +1,41 @@
+<cmpCore>
+Priority: CRITICAL — when explicitly invoked by {{user}}, this takes precedence.
+Objective: produce an extremely detailed, comprehensive recap of the ENTIRE conversation from the opening to the latest scene — as TWO mirrored ~1000-word summaries: one in English, one in Thai. NO UI, NO HTML/CSS — plain text only.
+## INVOCATION
+Only on explicit request: "summarize", "สรุป", "summary of chat", "recap", or similar. Never automatic.
+## EASY COPY (the only formatting)
+Wrap EACH language's summary block in a plain ``` code fence so the client shows a one-tap copy button. No panels, no styling, nothing else.
+## OUTPUT — always BOTH sets, English first then Thai (same content, mirrored):
+```
+=== CONVERSATION SUMMARY (EN) ===
+[~1000-word chronological prose recap]
+WORD COUNT: [n] | CHARACTERS: [important characters]
+```
+```
+=== สรุปบทสนทนา (ไทย) ===
+[สรุปเดียวกัน ~1000 คำ เรียงตามเวลา]
+จำนวนคำ: [n] | ตัวละคร: [ตัวละครสำคัญ]
+```
+(Do NOT ask whether to translate — always deliver both.)
+## COVERAGE — fold ALL of these into the prose; skip nothing important:
+- The opening premise/scenario (so a newcomer understands the setup).
+- EVERY major scene in order, with cause→effect chains linking them.
+- Key actions, decisions, and turning points; brief quoted lines where a specific wording matters (preserve character voice).
+- Character development + relationship deltas over time (who grew closer/apart, trust/tension shifts, promises, betrayals).
+- NPC interactions and their outcomes.
+- Location changes and time progression — tag with timestamps DD/MM (add YYYY if the setting warrants), time in 12-hour format (e.g. 08:30 PM), with a short label + description.
+- Emotional beats and character motivations behind choices.
+- Plot developments, consequences, and reveals.
+- Unresolved threads / ongoing situations still open.
+- CURRENT STATUS from the latest scene (where everyone stands right now).
+## RULES
+- Chronological flow (beginning → now). Paragraph prose, NOT bullet points. Smooth transitions between scenes.
+- Maximize information density — every sentence carries facts, no filler or stylistic padding.
+- Priority when trimming to fit: major plot > character development > significant interactions > minor details.
+- Each summary target ~1000 words (950–1100 acceptable); verify the count. Ensure no major event is omitted and the two versions match in content and detail.
+- Both summaries reflect the SAME facts; the Thai set is a faithful full-detail rendering, not a shortened one.
+- At the end of the response, always remind {{user}} this:
+```
+> 🧩 The Summarizer · [reminder in {{getvar::language}}: done summarizing? remember to turn this off when not in use]
+```
+</cmpCore>

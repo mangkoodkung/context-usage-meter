@@ -1,0 +1,12 @@
+{
+    "display_name": "Context Usage Meter",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "POPKO",
+    "contributors": ["xo.nara — Summarizer (Recap) prompt in recap-prompt.txt"],
+    "version": "0.2.0",
+    "homePage": "https://github.com/mangkoodkung/context-usage-meter"
+}
