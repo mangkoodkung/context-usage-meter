@@ -1,76 +1,243 @@
 <div class="context-usage-meter-settings">
     <div class="inline-drawer">
-        <div class="inline-drawer-toggle inline-drawer-header">
-            <b>Context Usage Meter</b>
+        <div class="inline-drawer-toggle inline-drawer-header cum-settings-header">
+            <span class="cum-settings-title"><span class="cum-settings-mark">◈</span> Context Usage Meter</span>
             <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
-        <div class="inline-drawer-content">
+        <div class="inline-drawer-content cum-settings-content">
 
-            <label class="checkbox_label" for="cum_enabled">
-                <input id="cum_enabled" type="checkbox" />
-                <span>เปิดใช้งานหลอดวัด context</span>
-            </label>
-
-            <label class="checkbox_label" for="cum_toast">
-                <input id="cum_toast" type="checkbox" />
-                <span>เตือน เมื่อพรอมท์ล้ำโซนคำตอบ</span>
-            </label>
-
-            <hr>
-
-            <label for="cum_threshold">เตือนเหลือง เมื่อใช้ถึง (% ของ context)</label>
-            <input id="cum_threshold" class="text_pole" type="number" min="10" max="99" step="1" />
-
-            <label for="cum_reserve">Response Reserve, token — 0 = อ่านจาก ST</label>
-            <input id="cum_reserve" class="text_pole" type="number" min="0" step="16" />
-
-            <label for="cum_theme">ชุดสีหลอด</label>
-            <select id="cum_theme" class="text_pole">
-                <option value="basic">เบสิค (เขียว/ส้ม/แดง)</option>
-                <option value="sakura">ม่วงชมพู (น่ารัก)</option>
-                <option value="mint">มินต์</option>
-                <option value="peach">พีช</option>
-                <option value="cottoncandy">ค็อตตอนแคนดี้</option>
-                <option value="galaxy">กาแล็กซี</option>
-                <option value="neon">นีออน</option>
-                <option value="pastel">พาสเทล</option>
-                <option value="ocean">โอเชียน</option>
-                <option value="mono">โมโนโครม</option>
-                <option value="custom">กำหนดเอง (custom)</option>
-            </select>
-
-            <div id="cum_custom_colors" style="display:none; margin-top:6px;">
-                <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
-                    <label style="display:flex; align-items:center; gap:5px;"><input id="cum_c_prompt" type="color" /> พรอมท์</label>
-                    <label style="display:flex; align-items:center; gap:5px;"><input id="cum_c_reserve" type="color" /> กันไว้ตอบ</label>
-                    <label style="display:flex; align-items:center; gap:5px;"><input id="cum_c_over" type="color" /> ล้น</label>
+            <div class="cum-settings-card cum-settings-hero">
+                <div>
+                    <strong>มองเห็นพื้นที่ของบทสนทนา</strong>
+                    <small>ติดตาม context และพื้นที่ที่เหลือให้โมเดลตอบแบบเรียลไทม์</small>
                 </div>
-                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px;">
-                    <input id="cum_save_name" class="text_pole" type="text" placeholder="ตั้งชื่อชุดสี" style="max-width:140px;" />
-                    <input id="cum_save_btn" class="menu_button" type="button" value="บันทึกชุดนี้" />
-                </div>
-                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:4px;">
-                    <select id="cum_saved" class="text_pole" style="max-width:160px;"></select>
-                    <input id="cum_del_btn" class="menu_button" type="button" value="ลบ" />
-                </div>
-                <small>เลือกจากรายการเพื่อโหลดชุดสี · ปุ่มลบ = ลบชุดที่เลือกอยู่</small>
+                <label class="cum-switch" for="cum_enabled">
+                    <input id="cum_enabled" type="checkbox" />
+                    <span class="cum-switch-track" aria-hidden="true"></span>
+                    <span>เปิดใช้งาน</span>
+                </label>
             </div>
 
-            <hr>
+            <section class="cum-settings-card" aria-labelledby="cum-display-title">
+                <div class="cum-section-heading">
+                    <div>
+                        <strong id="cum-display-title">รูปแบบมิเตอร์</strong>
+                        <small>เลือกหน้าตาที่เข้ากับพื้นที่แชทของคุณ</small>
+                    </div>
+                    <label class="cum-advanced-toggle" for="cum_advanced">
+                        <input id="cum_advanced" type="checkbox" />
+                        <span>Advanced</span>
+                    </label>
+                </div>
 
-            <div>
-                <small id="cum_live">breakdown จะแสดงหลังส่งข้อความรอบแรก</small>
-            </div>
+                <div class="cum-style-grid" role="radiogroup" aria-label="รูปแบบมิเตอร์พื้นฐาน">
+                    <label class="cum-style-option">
+                        <input type="radio" name="cum_meter_style" value="bar" />
+                        <span class="cum-style-preview cum-preview-bar"><i></i></span>
+                        <span class="cum-style-copy"><b>หลอดบาง</b><small>เรียบและประหยัดพื้นที่</small></span>
+                    </label>
+                    <label class="cum-style-option">
+                        <input type="radio" name="cum_meter_style" value="capsule" />
+                        <span class="cum-style-preview cum-preview-capsule"><i></i></span>
+                        <span class="cum-style-copy"><b>แคปซูล</b><small>นุ่มนวล มองเห็นง่าย</small></span>
+                    </label>
+                    <label class="cum-style-option">
+                        <input type="radio" name="cum_meter_style" value="blocks" />
+                        <span class="cum-style-preview cum-preview-blocks"><i></i><i></i><i></i><i></i></span>
+                        <span class="cum-style-copy"><b>ช่องแบ่ง</b><small>อ่านระดับเป็นช่วง</small></span>
+                    </label>
+                </div>
 
-            <div style="margin-top:8px;">
-                <input id="cum_compact_btn" class="menu_button" type="button" value="สรุปเนื้อหาทั้งหมด (EN+TH)" />
-                <input id="cum_reopen_btn" class="menu_button" type="button" value="เปิดสรุปล่าสุด" />
-            </div>
+                <div id="cum_advanced_styles" class="cum-advanced-panel" hidden aria-hidden="true">
+                    <div class="cum-advanced-label"><span>✦</span> รูปแบบ Advanced — ไม่ใช้หลอด</div>
+                    <div class="cum-style-grid" role="radiogroup" aria-label="รูปแบบมิเตอร์ Advanced">
+                        <label class="cum-style-option cum-style-option-advanced">
+                            <input type="radio" name="cum_meter_style" value="ring" />
+                            <span class="cum-style-preview cum-preview-ring"><i>68%</i></span>
+                            <span class="cum-style-copy"><b>วงแหวน</b><small>เปอร์เซ็นต์เด่น ใช้พื้นที่น้อย</small></span>
+                        </label>
+                        <label class="cum-style-option cum-style-option-advanced">
+                            <input type="radio" name="cum_meter_style" value="badge" />
+                            <span class="cum-style-preview cum-preview-badge"><i>◈ 68%</i></span>
+                            <span class="cum-style-copy"><b>ป้ายตัวเลข</b><small>กะทัดรัดและอ่านค่าทันที</small></span>
+                        </label>
+                        <label class="cum-style-option cum-style-option-advanced">
+                            <input type="radio" name="cum_meter_style" value="orb" />
+                            <span class="cum-style-preview cum-preview-orb"><i class="fa-solid fa-heart"></i><small>68%</small></span>
+                            <span class="cum-style-copy"><b>Floating Orb</b><small>ลากได้และดูดติดขอบจอ</small></span>
+                        </label>
+                        <label class="cum-style-option cum-style-option-advanced cum-signature-option">
+                            <input type="radio" name="cum_meter_style" value="familiar" />
+                            <span class="cum-style-preview cum-preview-familiar"><i>😺</i><small>68%</small></span>
+                            <span class="cum-style-copy"><b>Context Familiar</b><small>ตัวจิ๋วเปลี่ยนอารมณ์</small></span>
+                        </label>
+                        <label class="cum-style-option cum-style-option-advanced cum-signature-option">
+                            <input type="radio" name="cum_meter_style" value="constellation" />
+                            <span class="cum-style-preview cum-preview-constellation"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span>
+                            <span class="cum-style-copy"><b>Magic Constellation</b><small>กลุ่มดาวติดสว่างตาม context</small></span>
+                        </label>
+                        <label class="cum-style-option cum-style-option-advanced cum-signature-option">
+                            <input type="radio" name="cum_meter_style" value="bookmark" />
+                            <span class="cum-style-preview cum-preview-bookmark"><i>68%</i></span>
+                            <span class="cum-style-copy"><b>Edge Bookmark</b><small>ริบบิ้นเกาะขอบหน้าจอ</small></span>
+                        </label>
+                        <label class="cum-style-option cum-style-option-advanced cum-signature-option">
+                            <input type="radio" name="cum_meter_style" value="aura" />
+                            <span class="cum-style-preview cum-preview-aura"><i></i><small>68%</small></span>
+                            <span class="cum-style-copy"><b>Ambient Aura</b><small>ช่องพิมพ์เรืองสีแบบมินิมอล</small></span>
+                        </label>
+                    </div>
+                    <div id="cum_advanced_size_control" class="cum-advanced-size-control">
+                        <div class="cum-advanced-size-copy">
+                            <span>ขนาดมิเตอร์ Advanced</span>
+                            <output id="cum_advanced_size_value" for="cum_advanced_size">85%</output>
+                        </div>
+                        <div class="cum-size-slider-row">
+                            <small>เล็ก</small>
+                            <input id="cum_advanced_size" type="range" min="50" max="120" step="5" value="85" aria-label="ขนาดมิเตอร์ Advanced" />
+                            <small>ใหญ่</small>
+                        </div>
+                    </div>
+                    <div id="cum_orb_icons" class="cum-orb-icon-picker" hidden aria-hidden="true">
+                        <span>เลือกไอคอนประจำ Orb</span>
+                        <div class="cum-icon-grid" role="radiogroup" aria-label="ไอคอน Floating Orb">
+                            <label title="หัวใจ"><input type="radio" name="cum_orb_icon" value="heart" /><span><i class="fa-solid fa-heart"></i></span></label>
+                            <label title="ดวงดาว"><input type="radio" name="cum_orb_icon" value="star" /><span><i class="fa-solid fa-star"></i></span></label>
+                            <label title="ประกาย"><input type="radio" name="cum_orb_icon" value="sparkle" /><span><i class="fa-solid fa-wand-magic-sparkles"></i></span></label>
+                            <label title="พระจันทร์"><input type="radio" name="cum_orb_icon" value="moon" /><span><i class="fa-solid fa-moon"></i></span></label>
+                            <label title="อุ้งเท้า"><input type="radio" name="cum_orb_icon" value="paw" /><span><i class="fa-solid fa-paw"></i></span></label>
+                        </div>
+                    </div>
+                    <div id="cum_familiar_types" class="cum-orb-icon-picker" hidden aria-hidden="true">
+                        <span>เลือกตัวจิ๋วประจำ Context</span>
+                        <div class="cum-icon-grid cum-familiar-grid" role="radiogroup" aria-label="ตัวละคร Context Familiar">
+                            <label title="แมว"><input type="radio" name="cum_familiar_type" value="cat" /><span>😺</span></label>
+                            <label title="ผีจิ๋ว"><input type="radio" name="cum_familiar_type" value="ghost" /><span>👻</span></label>
+                            <label title="ก้อนดาว"><input type="radio" name="cum_familiar_type" value="star" /><span>🌟</span></label>
+                            <label title="กระต่าย"><input type="radio" name="cum_familiar_type" value="bunny" /><span>🐰</span></label>
+                            <label title="จิ้งจอก"><input type="radio" name="cum_familiar_type" value="fox" /><span>🦊</span></label>
+                            <label title="หมี"><input type="radio" name="cum_familiar_type" value="bear" /><span>🐻</span></label>
+                            <label title="กบ"><input type="radio" name="cum_familiar_type" value="frog" /><span>🐸</span></label>
+                            <label title="ลูกเจี๊ยบ"><input type="radio" name="cum_familiar_type" value="chick" /><span>🐥</span></label>
+                            <label title="แพนด้า"><input type="radio" name="cum_familiar_type" value="panda" /><span>🐼</span></label>
+                            <label title="เอเลี่ยน"><input type="radio" name="cum_familiar_type" value="alien" /><span>👽</span></label>
+                            <label title="หุ่นยนต์"><input type="radio" name="cum_familiar_type" value="robot" /><span>🤖</span></label>
+                            <label title="มังกร"><input type="radio" name="cum_familiar_type" value="dragon" /><span>🐲</span></label>
+                        </div>
+                    </div>
+                    <div id="cum_floating_tools" class="cum-floating-tools" hidden aria-hidden="true">
+                        <button id="cum_orb_reset" class="menu_button cum-orb-reset" type="button">รีเซ็ตตำแหน่งมิเตอร์ลอย</button>
+                    </div>
+                </div>
+            </section>
 
-            <hr>
-            <div style="text-align:center; opacity:.75;">
-                <small>Context Usage Meter · made by <b>POPKO</b></small><br>
-                <small>Summarizer (Recap) prompt by <b>xo.nara</b></small>
+            <section class="cum-settings-card" aria-labelledby="cum-color-title">
+                <div class="cum-section-heading">
+                    <div>
+                        <strong id="cum-color-title">สีและบรรยากาศ</strong>
+                        <small>ใช้ได้กับมิเตอร์ทุกรูปแบบ</small>
+                    </div>
+                </div>
+                <label class="cum-field" for="cum_theme">
+                    <span>ชุดสี</span>
+                    <select id="cum_theme" class="text_pole">
+                        <option value="basic">เบสิค (เขียว/ส้ม/แดง)</option>
+                        <option value="sakura">ม่วงชมพู (น่ารัก)</option>
+                        <option value="mint">มินต์</option>
+                        <option value="peach">พีช</option>
+                        <option value="cottoncandy">ค็อตตอนแคนดี้</option>
+                        <option value="galaxy">กาแล็กซี</option>
+                        <option value="neon">นีออน</option>
+                        <option value="pastel">พาสเทล</option>
+                        <option value="ocean">โอเชียน</option>
+                        <option value="mono">โมโนโครม</option>
+                        <option value="custom">กำหนดเอง (Custom)</option>
+                    </select>
+                </label>
+
+                <div id="cum_custom_colors" class="cum-custom-panel" style="display:none;">
+                    <div class="cum-color-row">
+                        <label><input id="cum_c_prompt" type="color" /><span>พรอมท์</span></label>
+                        <label><input id="cum_c_reserve" type="color" /><span>กันไว้ตอบ</span></label>
+                        <label><input id="cum_c_over" type="color" /><span>ล้น</span></label>
+                    </div>
+                    <div class="cum-inline-fields">
+                        <input id="cum_save_name" class="text_pole" type="text" placeholder="ตั้งชื่อชุดสี" />
+                        <input id="cum_save_btn" class="menu_button" type="button" value="บันทึกชุดนี้" />
+                    </div>
+                    <div class="cum-inline-fields">
+                        <select id="cum_saved" class="text_pole" aria-label="ชุดสีที่บันทึกไว้"></select>
+                        <input id="cum_del_btn" class="menu_button" type="button" value="ลบ" />
+                    </div>
+                    <small>เลือกจากรายการเพื่อโหลดชุดสีที่บันทึกไว้</small>
+                </div>
+            </section>
+
+            <section class="cum-settings-card cum-context-size-card" aria-labelledby="cum-context-size-title">
+                <div class="cum-section-heading">
+                    <div>
+                        <strong id="cum-context-size-title">Safe Context Size</strong>
+                        <small>เปลี่ยนค่า Context Size จริงของ SillyTavern</small>
+                    </div>
+                    <span class="cum-real-setting-badge">SYNC WITH ST</span>
+                </div>
+                <div class="cum-context-control">
+                    <label class="cum-field" for="cum_context_size">
+                        <span>Context Size ที่ต้องการใช้</span>
+                        <span class="cum-input-suffix"><input id="cum_context_size" class="text_pole" type="number" min="512" max="2000000" step="1" /><em>token</em></span>
+                    </label>
+                    <button id="cum_apply_context" class="menu_button cum-primary" type="button">นำไปใช้กับ SillyTavern</button>
+                </div>
+                <small id="cum_context_current" class="cum-context-current">กำลังอ่านค่าจาก SillyTavern…</small>
+                <div class="cum-context-presets" aria-label="Context Size presets">
+                    <button type="button" class="menu_button" data-cum-context-preset="90000" data-cum-context-profile="flash">⚡ Flash · 90k</button>
+                    <button type="button" class="menu_button" data-cum-context-preset="200000" data-cum-context-profile="pro">✦ Pro · 200k</button>
+                    <button id="cum_open_setup" type="button" class="menu_button">เปิดตัวช่วยเลือกค่า</button>
+                </div>
+            </section>
+
+            <section class="cum-settings-card" aria-labelledby="cum-alert-settings-title">
+                <div class="cum-section-heading">
+                    <div>
+                        <strong id="cum-alert-settings-title">การเตือนและขีดจำกัด</strong>
+                        <small>ปรับจุดเตือนให้เหมาะกับโมเดลที่ใช้งาน</small>
+                    </div>
+                </div>
+                <label class="cum-switch cum-switch-row" for="cum_toast">
+                    <input id="cum_toast" type="checkbox" />
+                    <span class="cum-switch-track" aria-hidden="true"></span>
+                    <span>เตือนเมื่อพรอมท์ใกล้เต็มหรือล้ำโซนคำตอบ</span>
+                </label>
+                <div class="cum-field-grid">
+                    <label class="cum-field" for="cum_threshold">
+                        <span>เริ่มเตือนเมื่อใช้</span>
+                        <span class="cum-input-suffix"><input id="cum_threshold" class="text_pole" type="number" min="50" max="80" step="1" /><em>%</em></span>
+                    </label>
+                    <label class="cum-field" for="cum_reserve">
+                        <span>Response Reserve</span>
+                        <span class="cum-input-suffix"><input id="cum_reserve" class="text_pole" type="number" min="0" step="16" /><em>token</em></span>
+                    </label>
+                </div>
+                <small class="cum-help">ตั้ง Reserve เป็น 0 เพื่ออ่านค่าจาก SillyTavern อัตโนมัติ</small>
+            </section>
+
+            <section class="cum-settings-card cum-status-card" aria-labelledby="cum-status-title">
+                <div class="cum-section-heading">
+                    <div>
+                        <strong id="cum-status-title">สถานะล่าสุด</strong>
+                        <small id="cum_live">Breakdown จะแสดงหลังส่งข้อความรอบแรก</small>
+                    </div>
+                    <span class="cum-live-dot" title="ติดตามแบบเรียลไทม์"></span>
+                </div>
+                <div class="cum-feature-paused" role="status">
+                    <span class="cum-feature-paused-icon">✦</span>
+                    <span><b>Summarize กำลังปรับปรุง</b><small>พักการใช้งานชั่วคราว เพื่อพัฒนาคุณภาพบทสรุปในเวอร์ชันถัดไป</small></span>
+                </div>
+            </section>
+
+            <div class="cum-settings-footer">
+                <small>Context Usage Meter · made by <b>POPKO</b></small>
+                <small>Summarizer prompt by <b>xo.nara</b></small>
             </div>
 
         </div>

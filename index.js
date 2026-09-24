@@ -18,6 +18,16 @@ const defaultSettings = {
     autoWarnToast: true,  // toast when prompt crosses the overflow line / threshold
     lastRecap: "",        // remembered last recap (for reopen)
     colorTheme: "basic",  // bar color scheme (preset name or "custom")
+    meterStyle: "bar",    // bar, capsule, or blocks
+    advancedMode: false,   // reveal non-bar meter styles
+    advancedScale: 85,     // visual size (%) for Advanced meters except Aura
+    orbIcon: "heart",      // heart, star, sparkle, moon, or paw
+    familiarType: "cat",   // selected Context Familiar character
+    setupVersion: 0,        // first-run Context Size assistant
+    contextProfile: "",     // flash, pro, custom, or current
+    managedContextSize: 0,  // last Context Size applied to SillyTavern
+    orbX: null,
+    orbY: null,
     customPrompt: "#ff9ecd",
     customOver: "#ff477e",
     customReserve: "#c9a7f0",
@@ -30,13 +40,23 @@ let recapText = "";
 let lastStats = null;
 let prevDanger = false;
 let prevWarn = false;
+let suppressAltClick = false;
+let orbIdleTimer = null;
 let oaiSettings = null; // linked to ST's live Chat Completion settings (source of truth for context/reserve)
+
+const RECAP_ENABLED = false; // paused until the recap output is reliable enough for release
+const DETACHED_METER_STYLES = new Set(["orb", "familiar", "constellation", "bookmark"]);
+const SCALABLE_METER_STYLES = new Set(["ring", "badge", "orb", "familiar", "constellation", "bookmark"]);
 
 /* ---------------- settings ---------------- */
 function getSettings() {
     extension_settings[extensionName] = extension_settings[extensionName] || {};
     const s = extension_settings[extensionName];
     for (const k in defaultSettings) if (s[k] === undefined) s[k] = defaultSettings[k];
+    s.thresholdPct = Math.max(50, Math.min(80, Number(s.thresholdPct) || 80));
+    s.setupVersion = Number(s.setupVersion) || 0;
+    s.managedContextSize = Number(s.managedContextSize) || 0;
+    s.advancedScale = Math.max(50, Math.min(120, Number(s.advancedScale) || 85));
     return s;
 }
 
@@ -86,6 +106,206 @@ function toast(kind, msg, title) {
     catch (e) { /* ignore */ }
 }
 
+function warningNotice(msg, title = "Context Meter") {
+    try {
+        if (window.toastr) toastr.warning(msg, title, {
+            timeOut: 0,
+            extendedTimeOut: 0,
+            closeButton: true,
+            tapToDismiss: true,
+            preventDuplicates: true,
+            newestOnTop: true,
+        });
+    } catch (e) { /* ignore */ }
+}
+
+const CONTEXT_SETUP_VERSION = 1;
+const MAX_UNLOCKED_CONTEXT = 2000000;
+
+function normalizeContextSize(value) {
+    const size = Math.round(Number(value));
+    return Number.isFinite(size) && size >= 512 && size <= MAX_UNLOCKED_CONTEXT ? size : 0;
+}
+
+// Write to SillyTavern's actual Chat Completion Context Size, not only this
+// extension's warning budget. Unlock ST's range when the chosen value needs it.
+function applySillyTavernContextSize(value, profile = "custom") {
+    const size = normalizeContextSize(value);
+    if (!size) {
+        toast("error", "กรุณาใส่ Context Size ระหว่าง 512–2,000,000");
+        return false;
+    }
+
+    const slider = document.getElementById("openai_max_context");
+    const counter = document.getElementById("openai_max_context_counter");
+    const unlock = document.getElementById("oai_max_context_unlocked");
+    const currentMax = Math.max(Number(slider?.max) || 0, Number(counter?.max) || 0);
+
+    if (size > currentMax) {
+        if (oaiSettings) oaiSettings.max_context_unlocked = true;
+        if (unlock) {
+            unlock.checked = true;
+            // Keep this local: ST records the unlock without reconnecting the API.
+            if (window.jQuery) $(unlock).trigger("input", [{ source: "preset" }]);
+            else unlock.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        if (slider) slider.max = String(MAX_UNLOCKED_CONTEXT);
+        if (counter) counter.max = String(MAX_UNLOCKED_CONTEXT);
+    }
+
+    if (oaiSettings) oaiSettings.openai_max_context = size;
+    if (slider) {
+        if (Number(slider.max) < size) slider.max = String(size);
+        slider.value = String(size);
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+        slider.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (counter) {
+        if (Number(counter.max) < size) counter.max = String(size);
+        counter.value = String(size);
+    }
+
+    const s = getSettings();
+    s.contextProfile = profile;
+    s.managedContextSize = size;
+    s.setupVersion = CONTEXT_SETUP_VERSION;
+    saveSettingsDebounced();
+    syncContextSizeField();
+    renderBar();
+    toast("success", `ตั้ง Context Size ของ SillyTavern เป็น ${fmt(size)} แล้ว`);
+    return true;
+}
+
+function syncContextSizeField() {
+    const input = document.getElementById("cum_context_size");
+    const current = document.getElementById("cum_context_current");
+    const size = getMaxContext();
+    if (input && document.activeElement !== input) input.value = String(size);
+    if (current) current.textContent = `ค่าที่ SillyTavern ใช้อยู่ตอนนี้: ${fmt(size)} tokens`;
+}
+
+function closeContextDialog() {
+    document.getElementById("cum-context-dialog")?.remove();
+}
+
+function shieldContextDialog(modal) {
+    // ST closes side drawers when it receives a click outside them. Dialog
+    // controls must not bubble up and accidentally close the settings drawer.
+    ["pointerdown", "mousedown", "mouseup", "click"].forEach((type) => {
+        modal.addEventListener(type, (event) => event.stopPropagation());
+    });
+}
+
+function showHighContextConfirmation(size, onConfirm, onCancel = null) {
+    closeContextDialog();
+    const modal = document.createElement("div");
+    modal.id = "cum-context-dialog";
+    modal.className = "cum-context-modal";
+    modal.innerHTML = `
+        <div class="cum-context-backdrop"></div>
+        <section class="cum-context-dialog cum-context-confirm" role="alertdialog" aria-modal="true" aria-labelledby="cum-confirm-title">
+            <div class="cum-dialog-icon">⚠</div>
+            <h3 id="cum-confirm-title">ยืนยัน Context Size ที่สูงมาก</h3>
+            <p>คุณต้องการใช้ <b>${fmt(size)} tokens</b> ใช่หรือไม่?</p>
+            <p class="cum-dialog-note">หากตั้ง Context Size สูงเกินไป จำนวน Token ที่ใช้งานอาจสูงมาก และโมเดลหรือผู้ให้บริการบางรายอาจไม่รองรับ</p>
+            <div class="cum-dialog-actions">
+                <button type="button" class="menu_button cum-dialog-cancel">กลับไปแก้ไข</button>
+                <button type="button" class="menu_button cum-primary cum-dialog-confirm">ยืนยันและใช้งาน</button>
+            </div>
+        </section>`;
+    document.body.appendChild(modal);
+    shieldContextDialog(modal);
+    const cancel = () => {
+        closeContextDialog();
+        onCancel?.();
+    };
+    modal.querySelector(".cum-dialog-cancel").addEventListener("click", cancel);
+    modal.querySelector(".cum-context-backdrop").addEventListener("click", cancel);
+    modal.querySelector(".cum-dialog-confirm").addEventListener("click", () => {
+        closeContextDialog();
+        onConfirm();
+    });
+    modal.querySelector(".cum-dialog-cancel").focus();
+}
+
+function requestContextSizeApply(size, profile = "custom", onDone = null, onCancel = null) {
+    const normalized = normalizeContextSize(size);
+    if (!normalized) {
+        toast("error", "กรุณาใส่ Context Size ระหว่าง 512–2,000,000");
+        return;
+    }
+    const apply = () => {
+        if (applySillyTavernContextSize(normalized, profile)) onDone?.();
+    };
+    if (normalized > 200000) showHighContextConfirmation(normalized, apply, onCancel);
+    else apply();
+}
+
+function showContextSetup() {
+    closeContextDialog();
+    const currentSize = getMaxContext();
+    const modal = document.createElement("div");
+    modal.id = "cum-context-dialog";
+    modal.className = "cum-context-modal";
+    modal.innerHTML = `
+        <div class="cum-context-backdrop"></div>
+        <section class="cum-context-dialog cum-context-setup" role="dialog" aria-modal="true" aria-labelledby="cum-setup-title">
+            <div class="cum-setup-kicker">✦ SAFE CONTEXT SETUP</div>
+            <h3 id="cum-setup-title">วันนี้คุณใช้โมเดลแบบไหน?</h3>
+            <p>ค่าที่เลือกจะเปลี่ยน <b>Context Size จริงของ SillyTavern</b> และมิเตอร์จะอิงค่าเดียวกันทันที</p>
+            <div class="cum-profile-grid" role="radiogroup" aria-label="เลือก Context Size">
+                <label class="cum-profile-card">
+                    <input type="radio" name="cum_setup_profile" value="flash" checked />
+                    <span class="cum-profile-icon">⚡</span><span><b>Gemini Flash</b><small>Community preset · 90,000 tokens</small></span>
+                </label>
+                <label class="cum-profile-card">
+                    <input type="radio" name="cum_setup_profile" value="pro" />
+                    <span class="cum-profile-icon">✦</span><span><b>Gemini Pro</b><small>Community preset · 200,000 tokens</small></span>
+                </label>
+                <label class="cum-profile-card cum-profile-custom">
+                    <input type="radio" name="cum_setup_profile" value="custom" />
+                    <span class="cum-profile-icon">⌁</span><span><b>กำหนดเอง</b><small>เลือกให้เหมาะกับโมเดลและผู้ให้บริการ</small></span>
+                </label>
+            </div>
+            <label class="cum-setup-custom-field" hidden>
+                <span>Context Size ที่ต้องการ</span>
+                <span class="cum-input-suffix"><input class="text_pole" id="cum_setup_custom_size" type="number" min="512" max="2000000" step="1" value="${currentSize}" /><em>token</em></span>
+            </label>
+            <div class="cum-setup-current">ค่าปัจจุบันใน SillyTavern: <b>${fmt(currentSize)} tokens</b></div>
+            <div class="cum-dialog-actions">
+                <button type="button" class="menu_button cum-use-current">ใช้ค่าปัจจุบัน</button>
+                <button type="button" class="menu_button cum-primary cum-setup-apply">ตั้งค่าและเริ่มใช้งาน</button>
+            </div>
+        </section>`;
+    document.body.appendChild(modal);
+    shieldContextDialog(modal);
+
+    const customWrap = modal.querySelector(".cum-setup-custom-field");
+    const customInput = modal.querySelector("#cum_setup_custom_size");
+    const selectedProfile = () => modal.querySelector('input[name="cum_setup_profile"]:checked')?.value || "flash";
+    modal.querySelectorAll('input[name="cum_setup_profile"]').forEach((radio) => {
+        radio.addEventListener("change", () => {
+            customWrap.hidden = selectedProfile() !== "custom";
+            if (!customWrap.hidden) customInput.focus();
+        });
+    });
+    modal.querySelector(".cum-use-current").addEventListener("click", () => {
+        const s = getSettings();
+        s.contextProfile = "current";
+        s.managedContextSize = currentSize;
+        s.setupVersion = CONTEXT_SETUP_VERSION;
+        saveSettingsDebounced();
+        closeContextDialog();
+        syncContextSizeField();
+    });
+    modal.querySelector(".cum-setup-apply").addEventListener("click", () => {
+        const profile = selectedProfile();
+        const size = profile === "flash" ? 90000 : profile === "pro" ? 200000 : customInput.value;
+        requestContextSizeApply(size, profile, closeContextDialog, showContextSetup);
+    });
+    modal.querySelector('input[name="cum_setup_profile"]:checked').focus();
+}
+
 /* ---------------- UI ---------------- */
 const COLOR_THEMES = {
     basic:  { prompt: "#4a9d6a", over: "#d1584f", reserve: "#d99a4e" },
@@ -112,6 +332,287 @@ function applyTheme(name) {
     wrap.style.setProperty("--cum-prompt", t.prompt);
     wrap.style.setProperty("--cum-over", t.over);
     wrap.style.setProperty("--cum-reserve", t.reserve);
+    const alt = document.getElementById("cum-alt-meter");
+    const panel = document.getElementById("cum-panel");
+    if (alt) {
+        alt.style.setProperty("--cum-prompt", t.prompt);
+        alt.style.setProperty("--cum-over", t.over);
+        alt.style.setProperty("--cum-reserve", t.reserve);
+    }
+    if (panel) {
+        panel.style.setProperty("--cum-prompt", t.prompt);
+        panel.style.setProperty("--cum-over", t.over);
+        panel.style.setProperty("--cum-reserve", t.reserve);
+    }
+    const sendForm = document.getElementById("send_form");
+    if (sendForm) {
+        sendForm.style.setProperty("--cum-prompt", t.prompt);
+        sendForm.style.setProperty("--cum-over", t.over);
+        sendForm.style.setProperty("--cum-reserve", t.reserve);
+    }
+}
+
+function applyMeterStyle(name) {
+    const wrap = document.getElementById("cum-wrap");
+    if (!wrap) return;
+    const allowed = ["bar", "capsule", "blocks", "ring", "badge", "orb", "familiar", "constellation", "bookmark", "aura"];
+    const style = allowed.includes(name) ? name : "bar";
+    wrap.dataset.meterStyle = style;
+    applyAdvancedScale(getSettings().advancedScale);
+    toggleAdvancedSizeControl(SCALABLE_METER_STYLES.has(style));
+    toggleOrbIconPicker(style === "orb");
+    toggleFamiliarPicker(style === "familiar");
+    toggleFloatingTools(DETACHED_METER_STYLES.has(style));
+    const panel = document.getElementById("cum-panel");
+    const alt = document.getElementById("cum-alt-meter");
+    const sendForm = document.getElementById("send_form");
+    sendForm?.classList.toggle("cum-aura-active", style === "aura");
+    if (DETACHED_METER_STYLES.has(style)) {
+        if (alt && alt.parentElement !== document.body) document.body.appendChild(alt);
+        if (panel && panel.parentElement !== document.body) document.body.appendChild(panel);
+        alt?.classList.add("cum-floating-meter");
+        if (alt) alt.dataset.floatingStyle = style;
+        panel?.classList.add("cum-floating-panel");
+        panel?.classList.toggle("open", wrap.classList.contains("expanded"));
+        applyTheme(getSettings().colorTheme);
+        requestAnimationFrame(positionFloatingOrb);
+        wakeFloatingOrb();
+    } else if (panel) {
+        clearTimeout(orbIdleTimer);
+        orbIdleTimer = null;
+        if (alt && alt.parentElement === document.body) document.getElementById("cum-bar")?.after(alt);
+        if (panel && panel.parentElement === document.body) alt?.after(panel);
+        alt?.classList.remove("cum-floating-meter", "idle", "dragging", "warn", "danger");
+        if (alt) delete alt.dataset.floatingStyle;
+        panel?.classList.remove("cum-floating-panel", "open");
+        alt?.style.removeProperty("left");
+        alt?.style.removeProperty("top");
+        panel.style.removeProperty("width");
+        panel.style.removeProperty("left");
+        panel.style.removeProperty("top");
+    }
+}
+
+function applyAdvancedScale(value) {
+    const scale = Math.max(50, Math.min(120, Number(value) || 85));
+    const alt = document.getElementById("cum-alt-meter");
+    const input = document.getElementById("cum_advanced_size");
+    const output = document.getElementById("cum_advanced_size_value");
+    if (alt) alt.style.setProperty("--cum-advanced-scale", `${scale / 100}`);
+    if (input && Number(input.value) !== scale) input.value = String(scale);
+    if (output) output.textContent = `${scale}%`;
+    if (DETACHED_METER_STYLES.has(getSettings().meterStyle)) requestAnimationFrame(positionFloatingOrb);
+}
+
+function toggleAdvancedSizeControl(show) {
+    const control = document.getElementById("cum_advanced_size_control");
+    if (!control) return;
+    control.hidden = !show;
+    control.setAttribute("aria-hidden", String(!show));
+}
+
+function toggleAdvancedStyles(show) {
+    const group = document.getElementById("cum_advanced_styles");
+    if (!group) return;
+    group.hidden = !show;
+    group.setAttribute("aria-hidden", String(!show));
+}
+
+function syncMeterStyleInputs(style) {
+    document.querySelectorAll('input[name="cum_meter_style"]').forEach((input) => {
+        input.checked = input.value === style;
+    });
+}
+
+const ORB_ICON_CLASSES = {
+    heart: "fa-heart",
+    star: "fa-star",
+    sparkle: "fa-wand-magic-sparkles",
+    moon: "fa-moon",
+    paw: "fa-paw",
+};
+
+const FAMILIAR_MOODS = {
+    cat: { normal: "😺", warn: "😿", danger: "🙀" },
+    ghost: { normal: "👻", warn: "😶‍🌫️", danger: "💀" },
+    star: { normal: "🌟", warn: "⭐", danger: "💥" },
+    bunny: { normal: "🐰", warn: "🥺", danger: "😱" },
+    fox: { normal: "🦊", warn: "😟", danger: "😱" },
+    bear: { normal: "🐻", warn: "🥺", danger: "😵" },
+    frog: { normal: "🐸", warn: "😥", danger: "😵‍💫" },
+    chick: { normal: "🐥", warn: "😟", danger: "😱" },
+    panda: { normal: "🐼", warn: "😥", danger: "😵" },
+    alien: { normal: "👽", warn: "😟", danger: "🤯" },
+    robot: { normal: "🤖", warn: "⚠️", danger: "💢" },
+    dragon: { normal: "🐲", warn: "😤", danger: "🔥" },
+};
+
+function toggleOrbIconPicker(show) {
+    const picker = document.getElementById("cum_orb_icons");
+    if (!picker) return;
+    picker.hidden = !show;
+    picker.setAttribute("aria-hidden", String(!show));
+}
+
+function applyOrbIcon(name) {
+    const iconName = ORB_ICON_CLASSES[name] ? name : "heart";
+    const icon = document.getElementById("cum-orb-icon");
+    if (icon) icon.className = `fa-solid ${ORB_ICON_CLASSES[iconName]}`;
+    document.querySelectorAll('input[name="cum_orb_icon"]').forEach((input) => {
+        input.checked = input.value === iconName;
+    });
+}
+
+function toggleFamiliarPicker(show) {
+    const picker = document.getElementById("cum_familiar_types");
+    if (!picker) return;
+    picker.hidden = !show;
+    picker.setAttribute("aria-hidden", String(!show));
+}
+
+function toggleFloatingTools(show) {
+    const tools = document.getElementById("cum_floating_tools");
+    if (!tools) return;
+    tools.hidden = !show;
+    tools.setAttribute("aria-hidden", String(!show));
+}
+
+function applyFamiliarType(name, mood = "normal") {
+    const type = FAMILIAR_MOODS[name] ? name : "cat";
+    const character = document.getElementById("cum-familiar-character");
+    if (character) character.textContent = FAMILIAR_MOODS[type][mood] || FAMILIAR_MOODS[type].normal;
+    document.querySelectorAll('input[name="cum_familiar_type"]').forEach((input) => {
+        input.checked = input.value === type;
+    });
+}
+
+function getViewportBounds() {
+    const viewport = window.visualViewport;
+    return {
+        left: viewport?.offsetLeft || 0,
+        top: viewport?.offsetTop || 0,
+        width: viewport?.width || window.innerWidth,
+        height: viewport?.height || window.innerHeight,
+    };
+}
+
+function getClampedOrbPosition(x, y) {
+    const viewport = getViewportBounds();
+    const rect = document.getElementById("cum-alt-meter")?.getBoundingClientRect();
+    const width = rect?.width || (viewport.width <= 1000 ? 52 : 58);
+    const height = rect?.height || (viewport.width <= 1000 ? 52 : 58);
+    const margin = 10;
+    return {
+        x: Math.max(viewport.left + margin, Math.min(viewport.left + viewport.width - width - margin, x)),
+        y: Math.max(viewport.top + margin, Math.min(viewport.top + viewport.height - height - margin, y)),
+    };
+}
+
+function wakeFloatingOrb() {
+    const alt = document.getElementById("cum-alt-meter");
+    if (!alt) return;
+    clearTimeout(orbIdleTimer);
+    alt.classList.remove("idle");
+    const wrap = document.getElementById("cum-wrap");
+    if (!DETACHED_METER_STYLES.has(getSettings().meterStyle) || wrap?.classList.contains("expanded") || wrap?.classList.contains("danger")) return;
+    orbIdleTimer = setTimeout(() => alt.classList.add("idle"), 2800);
+}
+
+function positionFloatingOrb() {
+    const alt = document.getElementById("cum-alt-meter");
+    if (!alt || !DETACHED_METER_STYLES.has(getSettings().meterStyle)) return;
+    const s = getSettings();
+    const viewport = getViewportBounds();
+    const fallbackX = viewport.left + viewport.width - (viewport.width <= 1000 ? 66 : 72);
+    const fallbackY = viewport.top + Math.round(viewport.height * 0.48);
+    const hasSavedX = s.orbX !== null && s.orbX !== "" && Number.isFinite(Number(s.orbX));
+    const hasSavedY = s.orbY !== null && s.orbY !== "" && Number.isFinite(Number(s.orbY));
+    const pos = getClampedOrbPosition(hasSavedX ? Number(s.orbX) : fallbackX, hasSavedY ? Number(s.orbY) : fallbackY);
+    alt.style.left = `${pos.x}px`;
+    alt.style.top = `${pos.y}px`;
+    if (document.getElementById("cum-wrap")?.classList.contains("expanded")) positionFloatingPanel();
+}
+
+function positionFloatingPanel() {
+    const wrap = document.getElementById("cum-wrap");
+    const alt = document.getElementById("cum-alt-meter");
+    const panel = document.getElementById("cum-panel");
+    if (!wrap || !alt || !panel || !DETACHED_METER_STYLES.has(getSettings().meterStyle)) return;
+    const viewport = getViewportBounds();
+    const orb = alt.getBoundingClientRect();
+    const panelWidth = Math.min(270, viewport.width - 24);
+    const gap = 10;
+    const fitsRight = orb.right + gap + panelWidth <= viewport.left + viewport.width - 12;
+    const left = fitsRight ? orb.right + gap : orb.left - panelWidth - gap;
+    panel.style.width = `${panelWidth}px`;
+    panel.style.left = `${Math.max(viewport.left + 12, Math.min(viewport.left + viewport.width - panelWidth - 12, left))}px`;
+    panel.style.top = `${Math.max(viewport.top + 12, Math.min(viewport.top + viewport.height - 132, orb.top))}px`;
+}
+
+function setupFloatingOrb(alt) {
+    let dragging = false;
+    let moved = false;
+    let startPointerX = 0;
+    let startPointerY = 0;
+    let startLeft = 0;
+    let startTop = 0;
+
+    alt.addEventListener("pointerdown", (e) => {
+        if (!DETACHED_METER_STYLES.has(getSettings().meterStyle) || e.button !== 0) return;
+        wakeFloatingOrb();
+        const rect = alt.getBoundingClientRect();
+        dragging = true;
+        moved = false;
+        startPointerX = e.clientX;
+        startPointerY = e.clientY;
+        startLeft = rect.left;
+        startTop = rect.top;
+        alt.setPointerCapture?.(e.pointerId);
+    });
+
+    alt.addEventListener("pointermove", (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - startPointerX;
+        const dy = e.clientY - startPointerY;
+        if (Math.abs(dx) + Math.abs(dy) > 5) moved = true;
+        if (!moved) return;
+        e.preventDefault();
+        const pos = getClampedOrbPosition(startLeft + dx, startTop + dy);
+        alt.style.left = `${pos.x}px`;
+        alt.style.top = `${pos.y}px`;
+        alt.classList.add("dragging");
+        positionFloatingPanel();
+    });
+
+    const finishDrag = (e) => {
+        if (!dragging) return;
+        dragging = false;
+        alt.classList.remove("dragging");
+        alt.releasePointerCapture?.(e.pointerId);
+        if (!moved) return;
+        suppressAltClick = true;
+        setTimeout(() => { suppressAltClick = false; }, 350);
+        const rect = alt.getBoundingClientRect();
+        const size = rect.width || 58;
+        const viewport = getViewportBounds();
+        const snappedX = rect.left + size / 2 < viewport.left + viewport.width / 2
+            ? viewport.left + 12
+            : viewport.left + viewport.width - size - 12;
+        const pos = getClampedOrbPosition(snappedX, rect.top);
+        alt.style.left = `${pos.x}px`;
+        alt.style.top = `${pos.y}px`;
+        const s = getSettings();
+        s.orbX = pos.x;
+        s.orbY = pos.y;
+        saveSettingsDebounced();
+        positionFloatingPanel();
+        wakeFloatingOrb();
+    };
+    alt.addEventListener("pointerup", finishDrag);
+    alt.addEventListener("pointercancel", finishDrag);
+    window.addEventListener("resize", positionFloatingOrb);
+    window.visualViewport?.addEventListener("resize", positionFloatingOrb);
+    window.visualViewport?.addEventListener("scroll", positionFloatingOrb);
 }
 
 function toggleCustomColors(show) {
@@ -185,11 +686,34 @@ function initBar() {
     const wrap = document.createElement("div");
     wrap.id = "cum-wrap";
     wrap.innerHTML = `
-        <div id="cum-bar" title="แตะเพื่อดู/ซ่อนรายละเอียด">
+        <div id="cum-bar" role="button" tabindex="0" aria-expanded="false" aria-controls="cum-panel" title="แตะเพื่อดู/ซ่อนรายละเอียด">
             <div id="cum-seg-prompt" class="cum-seg" style="width:0%" title="พรอมท์ที่ส่งรอบนี้ (system prompt + user/assistant)"></div>
             <div id="cum-seg-free" class="cum-seg" style="width:100%" title="ที่ว่างที่ยังใช้ได้"></div>
             <div id="cum-seg-over" class="cum-seg" style="width:0%" title="พรอมท์ล้ำเข้ามากินที่ของคำตอบ"></div>
             <div id="cum-seg-reserve" class="cum-seg" style="width:0%" title="พื้นที่กันไว้ให้โมเดลตอบ"></div>
+        </div>
+        <div id="cum-alt-meter" role="button" tabindex="0" aria-expanded="false" aria-controls="cum-panel" title="แตะเพื่อดู/ซ่อนรายละเอียด">
+            <div id="cum-alt-content">
+                <div id="cum-ring" aria-hidden="true"><span id="cum-ring-value">0%</span></div>
+                <div id="cum-badge" aria-hidden="true">
+                    <span class="cum-badge-icon">◈</span>
+                    <span id="cum-badge-value">0%</span>
+                    <span id="cum-badge-tokens">—</span>
+                </div>
+                <div id="cum-orb" aria-hidden="true">
+                    <span class="cum-orb-core"><i id="cum-orb-icon" class="fa-solid fa-heart"></i><small id="cum-orb-value">0%</small></span>
+                </div>
+                <div id="cum-familiar" aria-hidden="true">
+                    <span id="cum-familiar-character">😺</span><span id="cum-familiar-bubble">0%</span>
+                </div>
+                <div id="cum-constellation" aria-hidden="true">
+                    <span class="cum-star s1">✦</span><span class="cum-star s2">✦</span><span class="cum-star s3">✦</span>
+                    <span class="cum-star s4">✦</span><span class="cum-star s5">✦</span><span class="cum-star s6">✦</span><span class="cum-star s7">✦</span>
+                    <small id="cum-constellation-value">0%</small>
+                </div>
+                <div id="cum-bookmark" aria-hidden="true"><span id="cum-bookmark-value">0%</span><small>CTX</small></div>
+                <div id="cum-aura-chip" aria-hidden="true"><span id="cum-aura-value">0%</span></div>
+            </div>
         </div>
         <div id="cum-panel">
             <span id="cum-label">–</span>
@@ -197,16 +721,40 @@ function initBar() {
         </div>
         <div id="cum-alert">
             <span id="cum-alert-text">พรอมท์ล้ำโซนคำตอบ — โมเดลอาจตอบไม่ออก</span>
-            <button id="cum-compact-inline" class="menu_button" type="button">สรุปเนื้อหาทั้งหมด</button>
         </div>`;
 
     const form = document.getElementById("send_form");
     if (form && form.parentNode) form.parentNode.insertBefore(wrap, form);
     else document.body.appendChild(wrap);
 
-    document.getElementById("cum-bar").addEventListener("click", () => wrap.classList.toggle("expanded"));
-    document.getElementById("cum-compact-inline").addEventListener("click", makeRecap);
+    const toggleDetails = () => {
+        const expanded = wrap.classList.toggle("expanded");
+        document.getElementById("cum-bar").setAttribute("aria-expanded", String(expanded));
+        document.getElementById("cum-alt-meter").setAttribute("aria-expanded", String(expanded));
+        document.getElementById("cum-panel")?.classList.toggle("open", expanded && DETACHED_METER_STYLES.has(getSettings().meterStyle));
+        if (expanded) requestAnimationFrame(positionFloatingPanel);
+        wakeFloatingOrb();
+    };
+    const bindToggle = (element, isAlt = false) => {
+        element.addEventListener("click", () => {
+            if (isAlt && suppressAltClick) { suppressAltClick = false; return; }
+            toggleDetails();
+        });
+        element.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggleDetails();
+            }
+        });
+    };
+    bindToggle(document.getElementById("cum-bar"));
+    const altMeter = document.getElementById("cum-alt-meter");
+    bindToggle(altMeter, true);
+    setupFloatingOrb(altMeter);
     applyTheme(getSettings().colorTheme);
+    applyMeterStyle(getSettings().meterStyle);
+    applyOrbIcon(getSettings().orbIcon);
+    applyFamiliarType(getSettings().familiarType);
 }
 
 let lastSystem = 0, lastChat = 0, hasCounts = false;
@@ -236,8 +784,17 @@ function renderBar() {
     initBar();
     const w = document.getElementById("cum-wrap");
     if (!w) return;
-    if (!s.enabled) { w.style.display = "none"; return; }
+    const altMeter = document.getElementById("cum-alt-meter");
+    if (!s.enabled) {
+        w.style.display = "none";
+        if (altMeter) altMeter.style.display = "none";
+        const floatingPanel = document.getElementById("cum-panel");
+        if (floatingPanel) floatingPanel.style.display = "none";
+        return;
+    }
     w.style.display = "";
+    if (altMeter) altMeter.style.removeProperty("display");
+    document.getElementById("cum-panel")?.style.removeProperty("display");
     if (!hasCounts) return;
 
     const systemTokens = lastSystem, chatTokens = lastChat;
@@ -246,6 +803,7 @@ function renderBar() {
     const reserve = getReserve();
     const overflowLine = Math.max(0, maxCtx - reserve);
     const usagePct = maxCtx > 0 ? (prompt / maxCtx) * 100 : 0;
+    const displayPct = Math.max(0, Math.min(100, usagePct));
 
     const danger = prompt >= overflowLine;                 // eating reserve => reply won't fit
     const warn = !danger && usagePct >= s.thresholdPct;
@@ -264,13 +822,70 @@ function renderBar() {
     setW("cum-seg-over", over);
     setW("cum-seg-reserve", reserveLeft);
 
+    w.style.setProperty("--cum-usage-deg", `${displayPct * 3.6}deg`);
+    altMeter?.style.setProperty("--cum-usage-deg", `${displayPct * 3.6}deg`);
+    const ringValue = document.getElementById("cum-ring-value");
+    const badgeValue = document.getElementById("cum-badge-value");
+    const badgeTokens = document.getElementById("cum-badge-tokens");
+    const orbValue = document.getElementById("cum-orb-value");
+    const familiarBubble = document.getElementById("cum-familiar-bubble");
+    const constellationValue = document.getElementById("cum-constellation-value");
+    const bookmarkValue = document.getElementById("cum-bookmark-value");
+    const auraValue = document.getElementById("cum-aura-value");
+    if (ringValue) ringValue.textContent = `${usagePct.toFixed(0)}%`;
+    if (badgeValue) badgeValue.textContent = `${usagePct.toFixed(0)}%`;
+    if (badgeTokens) badgeTokens.textContent = `${fmt(prompt)} / ${fmt(maxCtx)}`;
+    if (orbValue) orbValue.textContent = `${usagePct.toFixed(0)}%`;
+    if (familiarBubble) familiarBubble.textContent = `${usagePct.toFixed(0)}%`;
+    if (constellationValue) constellationValue.textContent = `${usagePct.toFixed(0)}%`;
+    if (bookmarkValue) bookmarkValue.textContent = `${usagePct.toFixed(0)}%`;
+    if (auraValue) auraValue.textContent = `${usagePct.toFixed(0)}%`;
+
+    const mood = danger ? "danger" : warn ? "warn" : "normal";
+    applyFamiliarType(s.familiarType, mood);
+    const litStars = Math.max(1, Math.ceil(displayPct / 100 * 7));
+    document.querySelectorAll("#cum-constellation .cum-star").forEach((star, index) => {
+        star.classList.toggle("lit", index < litStars);
+    });
+
+    const meterLabel = `ใช้ context ${usagePct.toFixed(0)} เปอร์เซ็นต์ ส่ง ${fmt(prompt)} จาก ${fmt(maxCtx)} token แตะเพื่อดูรายละเอียด`;
+    document.getElementById("cum-bar")?.setAttribute("aria-label", meterLabel);
+    document.getElementById("cum-alt-meter")?.setAttribute("aria-label", meterLabel);
+
     const label = document.getElementById("cum-label");
     const detail = document.getElementById("cum-detail");
     if (label) label.textContent = `ส่งรอบนี้ ${fmt(prompt)} / ${fmt(maxCtx)} (${usagePct.toFixed(0)}%)`;
-    if (detail) detail.innerHTML = `system prompt ${fmt(systemTokens)} · user/assistant ${fmt(chatTokens)} · ที่ว่าง ${fmt(free)}<span class="cum-reserve-detail"> · กันไว้ตอบ ${fmt(reserve)}</span>`;
+    if (detail) detail.innerHTML = `
+        <span class="cum-detail-item">System ${fmt(systemTokens)}</span>
+        <span class="cum-detail-item">Chat ${fmt(chatTokens)}</span>
+        <span class="cum-detail-item">ว่าง ${fmt(free)}</span>
+        <span class="cum-detail-item cum-reserve-detail">กันไว้ตอบ ${fmt(reserve)}</span>`;
 
     w.classList.toggle("warn", warn);
     w.classList.toggle("danger", danger);
+    if (altMeter) {
+        altMeter.classList.toggle("warn", warn);
+        altMeter.classList.toggle("danger", danger);
+        altMeter.style.setProperty("--cum-active", danger
+            ? "var(--cum-over, #d1584f)"
+            : warn ? "var(--cum-reserve, #d99a4e)" : "var(--cum-prompt, #4a9d6a)");
+    }
+    const floatingPanel = document.getElementById("cum-panel");
+    floatingPanel?.style.setProperty("--cum-active", danger
+        ? "var(--cum-over, #d1584f)"
+        : warn ? "var(--cum-reserve, #d99a4e)" : "var(--cum-prompt, #4a9d6a)");
+    const sendForm = document.getElementById("send_form");
+    if (sendForm) {
+        sendForm.classList.toggle("warn", warn);
+        sendForm.classList.toggle("danger", danger);
+        sendForm.style.setProperty("--cum-aura-alpha", `${Math.round(16 + displayPct * 0.42)}%`);
+        sendForm.style.setProperty("--cum-active", danger
+            ? "var(--cum-over, #d1584f)"
+            : warn ? "var(--cum-reserve, #d99a4e)" : "var(--cum-prompt, #4a9d6a)");
+    }
+
+    const alertText = document.getElementById("cum-alert-text");
+    if (alertText) alertText.textContent = "พรอมท์ล้ำโซนคำตอบ — โมเดลอาจตอบไม่ออก";
 
     const live = document.getElementById("cum_live");
     if (live) live.textContent = `รอบล่าสุด: ส่ง ${fmt(prompt)} โทเคน (${usagePct.toFixed(0)}%) · เพดาน ${fmt(maxCtx)} · กันไว้ตอบ ${fmt(reserve)}${danger ? " · ⚠ ล้ำที่ของคำตอบ" : ""}`;
@@ -278,26 +893,26 @@ function renderBar() {
     lastStats = { prompt, maxCtx, reserve, usagePct, danger, warn };
     lastMaxCtx = maxCtx;
     lastReserve = reserve;
+
+    // Notify immediately when the real outgoing prompt crosses the user's threshold.
+    if (s.autoWarnToast) {
+        if (danger && !prevDanger) {
+            warningNotice("พรอมท์ล้ำพื้นที่ที่กันไว้สำหรับคำตอบ โมเดลอาจตอบไม่ออก — ลองลด context หรือเริ่มแชทใหม่");
+        } else if (warn && !prevWarn) {
+            warningNotice(`ใช้ context ถึง ${usagePct.toFixed(0)}% แล้ว (เกณฑ์ที่ตั้งไว้ ${s.thresholdPct}%)`);
+        }
+    }
+    prevDanger = danger;
+    prevWarn = warn;
+    wakeFloatingOrb();
 }
 
 // Re-render when context size or reserve changes by ANY means (typed number, slider, preset, API switch).
 function pollLimits() {
+    const currentMax = getMaxContext();
+    syncContextSizeField();
     if (!hasCounts) return;
-    if (getMaxContext() !== lastMaxCtx || getReserve() !== lastReserve) renderBar();
-}
-
-function onGenerationEnded() {
-    const s = getSettings();
-    if (!s.enabled || !lastStats) return;
-    if (s.autoWarnToast) {
-        if (lastStats.danger && !prevDanger) {
-            toast("warning", "พรอมท์ล้ำที่ของคำตอบแล้ว โมเดลอาจตอบไม่ออก — ลองสรุปเนื้อหาทั้งหมดแล้วเริ่มแชทใหม่");
-        } else if (lastStats.warn && !prevWarn && !lastStats.danger) {
-            toast("info", `ใช้ context ไป ${lastStats.usagePct.toFixed(0)}% แล้ว (ถึงเกณฑ์เตือน) — พิจารณาสรุปหรือเริ่มแชทใหม่`);
-        }
-    }
-    prevDanger = lastStats.danger;
-    prevWarn = lastStats.warn;
+    if (currentMax !== lastMaxCtx || getReserve() !== lastReserve) renderBar();
 }
 
 /* ---------------- compaction (reserved for a later stage; not wired in option A) ---------------- */
@@ -481,20 +1096,97 @@ function bindSettingsUI() {
     set("cum_toast", s.autoWarnToast);
     set("cum_threshold", s.thresholdPct);
     set("cum_reserve", s.reserveOverride);
+    set("cum_context_size", getMaxContext());
     set("cum_keep", s.keepLast);
     set("cum_theme", s.colorTheme);
+    set("cum_advanced", s.advancedMode);
+    set("cum_advanced_size", s.advancedScale);
     set("cum_c_prompt", s.customPrompt);
     set("cum_c_reserve", s.customReserve);
     set("cum_c_over", s.customOver);
     toggleCustomColors(s.colorTheme === "custom");
+    toggleAdvancedStyles(s.advancedMode);
+    applyAdvancedScale(s.advancedScale);
+    toggleAdvancedSizeControl(SCALABLE_METER_STYLES.has(s.meterStyle));
+    syncMeterStyleInputs(s.meterStyle);
+    applyOrbIcon(s.orbIcon);
+    toggleOrbIconPicker(s.meterStyle === "orb");
+    applyFamiliarType(s.familiarType);
+    toggleFamiliarPicker(s.meterStyle === "familiar");
+    toggleFloatingTools(DETACHED_METER_STYLES.has(s.meterStyle));
     refreshSavedThemes();
+    syncContextSizeField();
 
     const on = (id, ev, fn) => { const e = document.getElementById(id); if (e) e.addEventListener(ev, fn); };
     on("cum_enabled", "input", (e) => { s.enabled = !!e.target.checked; saveSettingsDebounced(); renderBar(); });
     on("cum_toast", "input", (e) => { s.autoWarnToast = !!e.target.checked; saveSettingsDebounced(); });
-    on("cum_threshold", "input", (e) => { s.thresholdPct = Number(e.target.value) || 80; saveSettingsDebounced(); renderBar(); });
+    on("cum_apply_context", "click", () => {
+        const value = document.getElementById("cum_context_size")?.value;
+        requestContextSizeApply(value, "custom");
+    });
+    on("cum_context_size", "keydown", (e) => {
+        if (e.key === "Enter") requestContextSizeApply(e.target.value, "custom");
+    });
+    on("cum_open_setup", "click", showContextSetup);
+    document.querySelectorAll("[data-cum-context-preset]").forEach((button) => {
+        button.addEventListener("click", () => {
+            requestContextSizeApply(button.dataset.cumContextPreset, button.dataset.cumContextProfile);
+        });
+    });
+    on("cum_threshold", "change", (e) => {
+        s.thresholdPct = Math.max(50, Math.min(80, Number(e.target.value) || 80));
+        e.target.value = s.thresholdPct;
+        saveSettingsDebounced();
+        renderBar();
+    });
     on("cum_reserve", "input", (e) => { s.reserveOverride = Number(e.target.value) || 0; saveSettingsDebounced(); renderBar(); });
     on("cum_theme", "change", (e) => { s.colorTheme = e.target.value; saveSettingsDebounced(); toggleCustomColors(s.colorTheme === "custom"); applyTheme(s.colorTheme); });
+    document.querySelectorAll('input[name="cum_meter_style"]').forEach((input) => {
+        input.addEventListener("change", (e) => {
+            if (!e.target.checked) return;
+            s.meterStyle = e.target.value;
+            saveSettingsDebounced();
+            applyMeterStyle(s.meterStyle);
+        });
+    });
+    document.querySelectorAll('input[name="cum_orb_icon"]').forEach((input) => {
+        input.addEventListener("change", (e) => {
+            if (!e.target.checked) return;
+            s.orbIcon = e.target.value;
+            saveSettingsDebounced();
+            applyOrbIcon(s.orbIcon);
+        });
+    });
+    document.querySelectorAll('input[name="cum_familiar_type"]').forEach((input) => {
+        input.addEventListener("change", (e) => {
+            if (!e.target.checked) return;
+            s.familiarType = e.target.value;
+            saveSettingsDebounced();
+            applyFamiliarType(s.familiarType, lastStats?.danger ? "danger" : lastStats?.warn ? "warn" : "normal");
+        });
+    });
+    on("cum_orb_reset", "click", () => {
+        s.orbX = null;
+        s.orbY = null;
+        saveSettingsDebounced();
+        positionFloatingOrb();
+        toast("success", "รีเซ็ตตำแหน่งมิเตอร์ลอยแล้ว");
+    });
+    on("cum_advanced", "input", (e) => {
+        s.advancedMode = !!e.target.checked;
+        if (!s.advancedMode && ["ring", "badge", "orb", "familiar", "constellation", "bookmark", "aura"].includes(s.meterStyle)) {
+            s.meterStyle = "bar";
+            syncMeterStyleInputs("bar");
+            applyMeterStyle("bar");
+        }
+        saveSettingsDebounced();
+        toggleAdvancedStyles(s.advancedMode);
+    });
+    on("cum_advanced_size", "input", (e) => {
+        s.advancedScale = Math.max(50, Math.min(120, Number(e.target.value) || 85));
+        applyAdvancedScale(s.advancedScale);
+        saveSettingsDebounced();
+    });
     on("cum_c_prompt", "input", (e) => { s.customPrompt = e.target.value; saveSettingsDebounced(); applyTheme("custom"); });
     on("cum_c_reserve", "input", (e) => { s.customReserve = e.target.value; saveSettingsDebounced(); applyTheme("custom"); });
     on("cum_c_over", "input", (e) => { s.customOver = e.target.value; saveSettingsDebounced(); applyTheme("custom"); });
@@ -502,8 +1194,10 @@ function bindSettingsUI() {
     on("cum_saved", "change", (e) => { if (e.target.value !== "") loadSavedTheme(Number(e.target.value)); });
     on("cum_del_btn", "click", deleteSavedTheme);
     on("cum_keep", "input", (e) => { s.keepLast = Number(e.target.value) || 10; saveSettingsDebounced(); });
-    on("cum_compact_btn", "click", makeRecap);
-    on("cum_reopen_btn", "click", reopenRecap);
+    if (RECAP_ENABLED) {
+        on("cum_compact_btn", "click", makeRecap);
+        on("cum_reopen_btn", "click", reopenRecap);
+    }
 }
 
 /* ---------------- init ---------------- */
@@ -528,7 +1222,11 @@ jQuery(async () => {
     }
 
     initBar();
-    loadRecapPrompt();
+    if (RECAP_ENABLED) loadRecapPrompt();
+
+    if (getSettings().setupVersion < CONTEXT_SETUP_VERSION) {
+        setTimeout(showContextSetup, 450);
+    }
 
     // follow ST's context-size / response-length fields live (slider drag OR typed number)
     ["openai_max_context", "max_context", "openai_max_tokens"].forEach((id) => {
@@ -553,7 +1251,12 @@ jQuery(async () => {
         catch (e) { console.error(`[${extensionName}] updateMeter error:`, e); }
     });
 
-    eventSource.on(event_types.GENERATION_ENDED, onGenerationEnded);
+    if (event_types.CHAT_CHANGED) {
+        eventSource.on(event_types.CHAT_CHANGED, () => {
+            prevDanger = false;
+            prevWarn = false;
+        });
+    }
 
     console.log(`[${extensionName}] ✅ loaded`);
 });

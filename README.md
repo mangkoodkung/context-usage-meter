@@ -1,141 +1,160 @@
 # 📊 Context Usage Meter
 
-🇹🇭 [ภาษาไทย](#-thai) · 🇬🇧 [English](#-english)
+🇹🇭 [ภาษาไทย](#ภาษาไทย) · 🇬🇧 [English](#english)
 
-A meter + warning extension for [SillyTavern](https://github.com/SillyTavern/SillyTavern) that shows exactly how full your context window is each round — and warns you *before* the prompt grows so large the model has no room left to reply.
+A responsive context meter and safety assistant for [SillyTavern](https://github.com/SillyTavern/SillyTavern). It tracks the real outgoing Chat Completion prompt, warns before the context becomes unsafe, and can update SillyTavern's actual Context Size.
 
 ---
 
-<a id="-thai"></a>
+## ภาษาไทย
 
-## 🇹🇭 Thai
+**Context Usage Meter** ช่วยให้เห็นว่าพรอมท์จริงที่กำลังส่งออกใช้ context ไปเท่าไร เหลือพื้นที่ให้โมเดลตอบแค่ไหน และเตือนก่อนที่บทสนทนาจะใหญ่จนเริ่มตอบไม่ออก
 
-**Context Usage Meter** คือหลอดวัดการใช้ context แบบเรียลไทม์สำหรับ SillyTavern มันบอกว่าแต่ละรอบคุณส่งไปกี่ token จากเพดานที่ตั้งไว้ และ **เตือนชัดๆ ก่อนที่พรอมท์จะโตจนไม่เหลือที่ให้โมเดลตอบ** (ต้นเหตุของอาการ "ทำไมเจนไม่ออก / ตอบว่างๆ") พร้อมปุ่มสรุปเนื้อหาทั้งบทเป็น EN + TH ไว้อ่าน/ก็อป/ย้ายไปแชทใหม่
+> รองรับ **Chat Completion** เช่น OpenAI, Claude และ Gemini
 
-> 💡 รองรับ **Chat Completion** (เช่น OpenAI, Claude, Gemini)
+### ฟีเจอร์
 
-### ✨ จุดเด่น
+- **มิเตอร์แบบเรียลไทม์:** นับ token จากพรอมท์จริงในจังหวะส่ง พร้อมแสดงเปอร์เซ็นต์ เพดาน Context และ Response Reserve
+- **แจ้งเตือนตามเกณฑ์:** เลือกจุดเตือนได้ตั้งแต่ 50–80% การเตือนจะแสดงครั้งเดียวต่อการข้ามเกณฑ์และปิดเองได้
+- **Safe Context Size:** แก้ค่า Context Size จริงของ SillyTavern โดยตรง มีตัวเลือก Flash 90k, Pro 200k และกำหนดเอง
+- **ตัวช่วยตั้งค่าครั้งแรก:** เลือกโปรไฟล์ที่ต้องการตอนเปิดใช้งานครั้งแรก หรือเปิดตัวช่วยใหม่จากหน้า Settings ได้ตลอด
+- **ยืนยันค่าที่สูงมาก:** ค่าเกิน 200,000 tokens ต้องยืนยันก่อน และส่วนเสริมจะเปิด Context Unlock ของ SillyTavern เมื่อจำเป็น
+- **รูปแบบพื้นฐาน:** หลอดบาง, แคปซูล และช่องแบ่ง
+- **รูปแบบ Advanced:** วงแหวน, ป้ายตัวเลข, Floating Orb, Context Familiar, Magic Constellation, Edge Bookmark และ Ambient Aura
+- **ปรับขนาดมิเตอร์ Advanced:** ปรับได้ 50–120% โดย Ambient Aura จะคงขนาดเดิม
+- **มิเตอร์ลอย:** ลากตำแหน่งได้ ดูดติดขอบจอ และค่อย ๆ จางเมื่อไม่ได้ใช้งาน
+- **Context Familiar:** มีตัวเลือก 12 แบบและเปลี่ยนอารมณ์ตามระดับ context
+- **ธีมสี:** มีชุดสีสำเร็จรูปและสี Custom ที่บันทึกไว้ใช้ซ้ำได้
+- **รองรับมือถือ:** รายละเอียดและหน้าต่างตั้งค่าปรับตามขนาดหน้าจอ
 
-- **📊 หลอดวัดสด:** เห็นทันทีว่ารอบนี้ส่งไปกี่ token / เพดานเท่าไหร่ / กี่ % แตะที่หลอดเพื่อดู breakdown (system prompt vs user/assistant · ที่ว่าง · พื้นที่กันไว้ตอบ)
-- **🚨 เตือนก่อนเจนไม่ออก:** หลอดมี "โซนกันไว้ให้คำตอบ" (สีส้ม) ถ้าพรอมท์ล้ำเข้าไป = แดง + เด้งเตือนทันที เพราะนั่นคือจุดที่โมเดลจะเริ่มตอบไม่ออกจริงๆ
-- **🔄 ตามค่าจริงของ ST:** อ่านขนาด context + ความยาวคำตอบจากตัวตั้งค่าของ SillyTavern โดยตรง ปรับตรงไหนหลอดขยับตาม (พิมพ์เลข / ลากสไลเดอร์ / โหลด preset)
-- **📝 สรุปเนื้อหาทั้งหมด (EN + TH):** กดปุ่มเดียว โมเดลสรุปทั้งบทเป็นสองภาษา เด้ง popup มีแท็บ English / ไทย + ปุ่มคัดลอก + เปิดสรุปล่าสุดซ้ำได้ (ไม่แตะข้อความเดิม)
-- **🎨 ชุดสีหลอด:** เลือกได้หลายธีม (เบสิค, ม่วงชมพู, มินต์, พีช, ค็อตตอนแคนดี้, กาแล็กซี, นีออน, พาสเทล, โอเชียน, โมโนโครม) หรือ **กำหนดเอง** เลือกสีทีละช่อง + บันทึกได้หลายชุด
-- **📱 ใช้ได้ทุกจอ:** หลอดบางไม่เกะกะบนมือถือ แตะเพื่อกางดูรายละเอียด popup จัดกึ่งกลางถูกต้องทุกแพลตฟอร์ม
+### Summarize
 
-### 🛠️ การติดตั้ง
+ฟีเจอร์ Summarize ถูกพักการใช้งานชั่วคราวระหว่างปรับปรุงคุณภาพ จึงยังไม่มีปุ่มสร้างสรุปที่ใช้งานจริงในรุ่นนี้
 
-**วิธีที่ 1 — ผ่าน SillyTavern (ง่ายสุด):**
+### การติดตั้ง
 
-1. เปิด SillyTavern → แผง Extensions → **Install Extension**
-2. วาง URL นี้:
+#### ผ่าน SillyTavern
 
-   ```
+1. เปิด SillyTavern → **Extensions** → **Install Extension**
+2. วาง URL:
+
+   ```text
    https://github.com/mangkoodkung/context-usage-meter
    ```
 
 3. รีเฟรช SillyTavern
 
-**วิธีที่ 2 — Manual:** คัดลอกโฟลเดอร์ `context-usage-meter` ไปไว้ที่ `SillyTavern/public/scripts/extensions/third-party/context-usage-meter` แล้วรีเฟรช
+#### ติดตั้งแบบ Manual
 
-> ต้องมี extension **Summarize** ในตัว ST เปิดไว้ เพื่อผลลัพธ์การสรุปที่ดีที่สุด
+คัดลอกโฟลเดอร์โปรเจกต์ไปที่:
 
-### 💡 วิธีใช้
+```text
+SillyTavern/data/default-user/extensions/context-usage-meter
+```
 
-1. หลอดจะโผล่เหนือช่องพิมพ์ ส่งข้อความ 1 รอบแล้วมันจะเริ่มแสดงค่า — แตะที่หลอดเพื่อดูตัวเลขเต็ม
-2. เมื่อพรอมท์ใกล้เต็ม หลอดจะเปลี่ยนสี + เด้งเตือน (ตั้งเกณฑ์ % ได้ในตั้งค่า)
-3. กด **"สรุปเนื้อหาทั้งหมด (EN+TH)"** ในแผงตั้งค่า (หรือปุ่มที่โผล่ตอนเตือน) เพื่อสรุปทั้งบท → ก็อป/เซฟไปเริ่มแชทใหม่
-4. ปรับ **ชุดสีหลอด** ตามชอบ หรือเลือก **กำหนดเอง** เพื่อจิ้มสีเอง + บันทึกชุดไว้
+จากนั้นรีเฟรช SillyTavern
 
-### ⚙️ การตั้งค่า
+### วิธีใช้
 
-เปิด/ปิดหลอด · เปิด/ปิดการเตือน · เกณฑ์ % เตือน · Response Reserve (0 = อ่านจาก ST อัตโนมัติ) · ชุดสีหลอด + สีกำหนดเอง (บันทึกหลายชุดได้)
+1. เปิดหน้า Extensions แล้วเปิดใช้งาน Context Usage Meter
+2. เลือก Context Size จากตัวช่วยครั้งแรก หรือใช้ค่าปัจจุบันของ SillyTavern
+3. เลือกรูปแบบมิเตอร์และชุดสีที่ต้องการ
+4. ส่งข้อความตามปกติ มิเตอร์จะอัปเดตจากพรอมท์จริงก่อนส่งไปยังโมเดล
+5. แตะหรือคลิกมิเตอร์เพื่อดูรายละเอียด token
 
-### 🔧 ติดต่อ
+### การตั้งค่าหลัก
 
-**Discord: majesty.pop (POPKO)**
+- เปิด/ปิดมิเตอร์และการแจ้งเตือน
+- Context Size จริงของ SillyTavern
+- เกณฑ์เตือน 50–80%
+- Response Reserve (`0` = อ่านจาก SillyTavern อัตโนมัติ)
+- รูปแบบและขนาดมิเตอร์
+- ไอคอน Floating Orb และตัวละคร Familiar
+- ชุดสีสำเร็จรูป สี Custom และชุดสีที่บันทึกไว้
 
-### 📜 License & Terms of Use
+### ติดต่อ
 
-โปรเจกต์นี้ใช้ **Custom License** ดูฉบับเต็มที่ไฟล์ [LICENSE](./LICENSE)
-
-> [!WARNING]
-> **สำคัญมาก (CRITICAL):** โปรเจกต์นี้สร้างเพื่อแบ่งปันให้คอมมูนิตี้ใช้ฟรี
->
-> 1. ✅ **อนุญาต:** Fork / ดัดแปลง / พัฒนาต่อ เพื่อแจกจ่ายคืนคอมมูนิตี้
-> 2. ❌ **ห้าม:** นำไปใช้เชิงพาณิชย์หรือแสวงหากำไรทุกรูปแบบ
-> 3. ❌ **ห้าม:** ปิดซอร์สโค้ด หรือดัดแปลงเพื่อจำหน่าย
-> 4. ⚠️ **ต้อง:** ให้เครดิตว่ามาจาก Context Usage Meter โดย POPKO
+Discord: **majesty.pop (POPKO)**
 
 ---
 
-<a id="-english"></a>
+## English
 
-## 🇬🇧 English
+**Context Usage Meter** shows how much of the context window the real outgoing prompt uses, how much room remains for the model's reply, and warns before an oversized conversation begins causing empty or failed responses.
 
-**Context Usage Meter** is a real-time context gauge for SillyTavern. It shows how many tokens you send each round out of your configured limit, and **warns you clearly before the prompt grows so large the model has no room left to reply** (the real cause of "why won't it generate / it returns nothing"). It also generates a full bilingual (EN + TH) recap of the whole chat for you to read, copy, or carry into a fresh chat.
+> Supports **Chat Completion**, including OpenAI, Claude, and Gemini.
 
-> 💡 Supports **Chat Completion** (e.g. OpenAI, Claude, Gemini)
+### Features
 
-### ✨ Features
+- **Real-time metering:** Counts the actual outgoing prompt and displays usage percentage, Context Size, and Response Reserve.
+- **Threshold warnings:** Configure warnings from 50–80%. A warning appears once per threshold crossing and remains dismissible.
+- **Safe Context Size:** Updates SillyTavern's actual Context Size, with Flash 90k, Pro 200k, and custom options.
+- **First-run setup assistant:** Select a profile on first use or reopen the assistant from Settings at any time.
+- **High-value confirmation:** Values above 200,000 tokens require confirmation; SillyTavern's Context Unlock is enabled when needed.
+- **Basic styles:** Slim bar, capsule, and segmented blocks.
+- **Advanced styles:** Ring, numeric badge, Floating Orb, Context Familiar, Magic Constellation, Edge Bookmark, and Ambient Aura.
+- **Advanced meter sizing:** Scale supported Advanced meters from 50–120%; Ambient Aura remains unchanged.
+- **Floating meters:** Drag to reposition, snap to screen edges, and fade while idle.
+- **Context Familiar:** Twelve characters with mood changes based on context pressure.
+- **Color themes:** Built-in palettes plus reusable custom color sets.
+- **Responsive UI:** Settings, details, and floating elements adapt to desktop and mobile screens.
 
-- **📊 Live meter:** See at a glance how much you sent this round / the max context / the percentage. Tap the bar for a breakdown (system prompt vs user/assistant · free space · reserved reply space).
-- **🚨 Warns before empty generations:** The bar shows a "reserved-for-reply" zone (amber). If the prompt crosses into it → red + instant warning, because that's exactly when the model starts failing to reply.
-- **🔄 Follows ST's real values:** Reads context size + response length straight from SillyTavern's settings, so the bar tracks any change (typed number / slider / preset load).
-- **📝 Full recap (EN + TH):** One click and the model summarizes the entire chat in both languages, shown in a popup with English / Thai tabs + a copy button + reopen-last (never touches your existing messages).
-- **🎨 Bar color themes:** Pick from many themes (Basic, Sakura, Mint, Peach, Cotton Candy, Galaxy, Neon, Pastel, Ocean, Mono) or go **Custom** — choose each color and save multiple sets.
-- **📱 Works everywhere:** A slim bar that stays out of the way on mobile, tap to expand; the recap popup is correctly centered on every platform.
+### Summarize status
 
-### 🛠️ Installation
+Summarize is temporarily paused while its output quality is being improved. This release does not expose functional summary controls.
 
-**Option 1 — via SillyTavern (easiest):**
+### Installation
 
-1. Open SillyTavern → Extensions panel → **Install Extension**
-2. Paste this URL:
+#### Through SillyTavern
 
-   ```
+1. Open SillyTavern → **Extensions** → **Install Extension**.
+2. Paste:
+
+   ```text
    https://github.com/mangkoodkung/context-usage-meter
    ```
 
 3. Refresh SillyTavern.
 
-**Option 2 — Manual:** Copy the `context-usage-meter` folder into `SillyTavern/public/scripts/extensions/third-party/context-usage-meter`, then refresh.
+#### Manual installation
 
-> Keep SillyTavern's built-in **Summarize** extension enabled for the best recap results.
+Copy the project folder to:
 
-### 💡 Usage
+```text
+SillyTavern/data/default-user/extensions/context-usage-meter
+```
 
-1. The bar appears above the input box. Send one message and it starts showing values — tap the bar for full numbers.
-2. As the prompt fills up, the bar changes color and a warning pops (threshold % is configurable).
-3. Click **"สรุปเนื้อหาทั้งหมด (EN+TH)"** in the settings panel (or the button that appears on warning) to summarize the whole chat → copy/save it to seed a new chat.
-4. Adjust the **bar color theme**, or pick **Custom** to choose your own colors and save sets.
+Then refresh SillyTavern.
 
-### ⚙️ Settings
+### Usage
 
-Enable/disable the meter · toggle warnings · warning threshold % · Response Reserve (0 = auto-read from ST) · bar color theme + custom colors (multiple saved sets).
+1. Enable Context Usage Meter from the Extensions panel.
+2. Choose a Context Size in the first-run assistant or keep SillyTavern's current value.
+3. Select a meter style and color theme.
+4. Send messages normally. The meter updates from the real prompt immediately before it is sent.
+5. Tap or click the meter to view the token breakdown.
 
-### 🔧 Contact
+### Main settings
 
-**Discord: majesty.pop (POPKO)**
+- Meter and warning toggles
+- SillyTavern's actual Context Size
+- Warning threshold from 50–80%
+- Response Reserve (`0` = read automatically from SillyTavern)
+- Meter style and Advanced meter scale
+- Floating Orb icon and Familiar character
+- Preset, custom, and saved color themes
 
-### 📜 License & Terms of Use
+### Contact
 
-This Extension uses a **Custom License**. See the full terms in the [LICENSE](./LICENSE) file.
-
-> [!WARNING]
-> **CRITICAL:** This project was created to be shared freely with the community.
->
-> 1. ✅ **Allowed:** Fork / modify / develop further to share back with the community
-> 2. ❌ **Forbidden:** Any commercial or for-profit use
-> 3. ❌ **Forbidden:** Closing the source or selling derivatives
-> 4. ⚠️ **Required:** Credit Context Usage Meter by POPKO
-
----
-
-## 🙏 Credits
-
-- **Extension:** POPKO (majesty.pop)
-- **Summarizer (Recap) prompt:** [xo.nara](https://github.com/) — bundled as `recap-prompt.txt` with credit
+Discord: **majesty.pop (POPKO)**
 
 ---
+
+## License and credits
+
+This project uses the terms in [LICENSE](./LICENSE). Commercial or for-profit use is not permitted; forks and modifications shared back to the community must retain credit.
+
+- Extension: **POPKO (majesty.pop)**
+- Original recap prompt: **xo.nara** (`recap-prompt.txt`; recap UI is currently paused)
+
 *Created with care. ✨*

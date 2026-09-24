@@ -7,6 +7,6 @@
     "css": "style.css",
     "author": "POPKO",
     "contributors": ["xo.nara — Summarizer (Recap) prompt in recap-prompt.txt"],
-    "version": "0.2.0",
+    "version": "0.3.0",
     "homePage": "https://github.com/mangkoodkung/context-usage-meter"
 }
