@@ -459,10 +459,15 @@
 }
 
 .cum-settings-content {
-    display: flex;
     flex-direction: column;
     gap: 10px;
     padding-top: 8px;
+}
+
+/* SillyTavern hides inline drawers with `display: none`. Only restore our flex
+   layout after its drawer script has explicitly opened this panel. */
+.cum-settings-content[style*="display: block"] {
+    display: flex !important;
 }
 
 .cum-settings-card {
@@ -897,6 +902,43 @@
 .cum-context-confirm .cum-dialog-actions { justify-content: center; }
 .cum-dialog-note { padding: 10px; border-radius: 9px; background: rgba(255, 192, 75, .08); }
 
+.cum-quick-settings-dialog {
+    width: min(720px, 100%);
+    height: min(780px, calc(100dvh - 36px));
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.cum-quick-settings-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 18px 13px;
+    border-bottom: 1px solid color-mix(in srgb, var(--cum-dialog-accent) 24%, var(--SmartThemeBorderColor, #555));
+}
+.cum-quick-settings-heading > div { min-width: 0; }
+.cum-quick-settings-heading small {
+    color: var(--cum-dialog-accent);
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: .13em;
+}
+.cum-quick-settings-heading h3 { margin: 2px 0 0; }
+.cum-quick-settings-close { min-width: 34px; min-height: 34px; margin: 0; }
+.cum-quick-settings-slot {
+    flex: 1;
+    min-height: 0;
+    padding: 14px 18px 18px;
+    overflow: auto;
+}
+.cum-quick-settings-modal .context-usage-meter-settings > .inline-drawer > .cum-settings-header { display: none; }
+.cum-quick-settings-modal .cum-settings-content {
+    display: flex !important;
+    padding-top: 0;
+}
+
 .cum-custom-panel {
     margin-top: 9px;
     padding: 10px;
@@ -904,6 +946,8 @@
     border-radius: 9px;
     background: rgba(0, 0, 0, .08);
 }
+.cum-panel-custom[hidden] { display: none !important; }
+.cum-panel-custom input[type="color"] { width: 100%; min-height: 34px; }
 .cum-color-row { display: flex; gap: 12px; flex-wrap: wrap; }
 .cum-color-row label { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; }
 .cum-color-row input[type="color"] { width: 27px; height: 24px; padding: 1px; border-radius: 6px; }

@@ -31,6 +31,8 @@ const defaultSettings = {
     customPrompt: "#ff9ecd",
     customOver: "#ff477e",
     customReserve: "#c9a7f0",
+    panelTheme: "system",   // Quick Menu accent; independent from meter colors
+    panelCustom: "#a99af5",
     savedThemes: [],      // user-saved custom color sets: [{name, prompt, over, reserve}]
 };
 
@@ -43,6 +45,7 @@ let prevWarn = false;
 let suppressAltClick = false;
 let orbIdleTimer = null;
 let oaiSettings = null; // linked to ST's live Chat Completion settings (source of truth for context/reserve)
+let closeQuickSettingsDialog = null;
 
 const RECAP_ENABLED = false; // paused until the recap output is reliable enough for release
 const DETACHED_METER_STYLES = new Set(["orb", "familiar", "constellation", "bookmark"]);
@@ -319,6 +322,35 @@ const COLOR_THEMES = {
     ocean:  { prompt: "#3fa7d6", over: "#ef476f", reserve: "#ffd166" },
     mono:   { prompt: "#7f868f", over: "#ef4444", reserve: "#b8bcc4" },
 };
+const PANEL_ACCENTS = {
+    rose: "#ff9ecd",
+    violet: "#a99af5",
+    blue: "#59b8ff",
+    mint: "#66d9b5",
+    amber: "#f1b85b",
+};
+
+function applyPanelTheme(name = getSettings().panelTheme) {
+    const s = getSettings();
+    const accent = name === "custom" ? s.panelCustom : PANEL_ACCENTS[name] || "";
+    const targets = [
+        document.querySelector(".context-usage-meter-settings"),
+        document.getElementById("cum-quick-settings-modal"),
+    ];
+    for (const target of targets) {
+        if (!target) continue;
+        if (target.id === "cum-quick-settings-modal") {
+            if (accent) target.style.setProperty("--cum-dialog-accent", accent);
+            else target.style.removeProperty("--cum-dialog-accent");
+        } else {
+            if (accent) target.style.setProperty("--cum-ui-accent", accent);
+            else target.style.removeProperty("--cum-ui-accent");
+        }
+    }
+    const custom = document.getElementById("cum_panel_custom_wrap");
+    if (custom) custom.hidden = name !== "custom";
+}
+
 function applyTheme(name) {
     let t;
     if (name === "custom") {
@@ -757,6 +789,81 @@ function initBar() {
     applyFamiliarType(getSettings().familiarType);
 }
 
+function openSettingsFromQuickMenu() {
+    const settings = document.querySelector(".context-usage-meter-settings");
+    if (!settings) return;
+    const settingsContent = settings.querySelector(":scope > .inline-drawer > .cum-settings-content");
+    if (!settingsContent) return;
+
+    closeQuickSettingsDialog?.();
+    const placeholder = document.createComment("context-usage-meter-settings-home");
+    const previousContentStyle = settingsContent.getAttribute("style");
+    settings.before(placeholder);
+
+    const modal = document.createElement("div");
+    modal.id = "cum-quick-settings-modal";
+    modal.className = "cum-context-modal cum-quick-settings-modal";
+    modal.innerHTML = `
+        <div class="cum-context-backdrop"></div>
+        <section class="cum-context-dialog cum-quick-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="cum-quick-settings-title">
+            <header class="cum-quick-settings-heading">
+                <div><small>QUICK MENU</small><h3 id="cum-quick-settings-title">Context Usage Meter</h3></div>
+                <button type="button" class="menu_button cum-quick-settings-close" aria-label="ปิดหน้าต่างตั้งค่า" title="ปิด">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </header>
+            <div class="cum-quick-settings-slot"></div>
+        </section>`;
+    modal.querySelector(".cum-quick-settings-slot").appendChild(settings);
+    document.body.appendChild(modal);
+    applyPanelTheme();
+
+    const close = () => {
+        if (!modal.isConnected) return;
+        document.removeEventListener("keydown", onKeyDown);
+        placeholder.replaceWith(settings);
+        if (previousContentStyle === null) settingsContent.removeAttribute("style");
+        else settingsContent.setAttribute("style", previousContentStyle);
+        modal.remove();
+        closeQuickSettingsDialog = null;
+    };
+    const onKeyDown = (event) => {
+        if (event.key === "Escape") close();
+    };
+    closeQuickSettingsDialog = close;
+    modal.querySelector(".cum-context-backdrop").addEventListener("click", close);
+    modal.querySelector(".cum-quick-settings-close").addEventListener("click", close);
+    document.addEventListener("keydown", onKeyDown);
+    modal.querySelector(".cum-quick-settings-close").focus();
+}
+
+function initQuickMenu(attempt = 0) {
+    if (document.getElementById("cum-quick-menu")) return;
+    const menu = document.getElementById("extensionsMenu");
+    if (!menu) {
+        if (attempt < 20) setTimeout(() => initQuickMenu(attempt + 1), 250);
+        return;
+    }
+
+    const item = document.createElement("div");
+    item.id = "cum-quick-menu";
+    item.setAttribute("role", "button");
+    item.setAttribute("tabindex", "0");
+    item.setAttribute("title", "เปิดการตั้งค่า Context Usage Meter");
+    item.innerHTML = `
+        <div class="fa-solid fa-gauge-high extensionsMenuExtensionButton" aria-hidden="true"></div>
+        <span>Context Usage Meter</span>`;
+
+    const open = () => openSettingsFromQuickMenu();
+    item.addEventListener("click", open);
+    item.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        open();
+    });
+    menu.appendChild(item);
+}
+
 let lastSystem = 0, lastChat = 0, hasCounts = false;
 let lastMaxCtx = -1, lastReserve = -1;
 
@@ -1099,12 +1206,15 @@ function bindSettingsUI() {
     set("cum_context_size", getMaxContext());
     set("cum_keep", s.keepLast);
     set("cum_theme", s.colorTheme);
+    set("cum_panel_theme", s.panelTheme);
+    set("cum_panel_custom", s.panelCustom);
     set("cum_advanced", s.advancedMode);
     set("cum_advanced_size", s.advancedScale);
     set("cum_c_prompt", s.customPrompt);
     set("cum_c_reserve", s.customReserve);
     set("cum_c_over", s.customOver);
     toggleCustomColors(s.colorTheme === "custom");
+    applyPanelTheme(s.panelTheme);
     toggleAdvancedStyles(s.advancedMode);
     applyAdvancedScale(s.advancedScale);
     toggleAdvancedSizeControl(SCALABLE_METER_STYLES.has(s.meterStyle));
@@ -1141,6 +1251,8 @@ function bindSettingsUI() {
     });
     on("cum_reserve", "input", (e) => { s.reserveOverride = Number(e.target.value) || 0; saveSettingsDebounced(); renderBar(); });
     on("cum_theme", "change", (e) => { s.colorTheme = e.target.value; saveSettingsDebounced(); toggleCustomColors(s.colorTheme === "custom"); applyTheme(s.colorTheme); });
+    on("cum_panel_theme", "change", (e) => { s.panelTheme = e.target.value; saveSettingsDebounced(); applyPanelTheme(s.panelTheme); });
+    on("cum_panel_custom", "input", (e) => { s.panelCustom = e.target.value; saveSettingsDebounced(); applyPanelTheme("custom"); });
     document.querySelectorAll('input[name="cum_meter_style"]').forEach((input) => {
         input.addEventListener("change", (e) => {
             if (!e.target.checked) return;
@@ -1222,6 +1334,7 @@ jQuery(async () => {
     }
 
     initBar();
+    initQuickMenu();
     if (RECAP_ENABLED) loadRecapPrompt();
 
     if (getSettings().setupVersion < CONTEXT_SETUP_VERSION) {

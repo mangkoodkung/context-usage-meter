@@ -173,6 +173,31 @@
                 </div>
             </section>
 
+            <section class="cum-settings-card" aria-labelledby="cum-panel-color-title">
+                <div class="cum-section-heading">
+                    <div>
+                        <strong id="cum-panel-color-title">สีหน้าต่าง Quick Menu</strong>
+                        <small>ตั้งค่าแยกจากชุดสีของมิเตอร์</small>
+                    </div>
+                </div>
+                <label class="cum-field" for="cum_panel_theme">
+                    <span>สี Accent ของหน้าต่าง</span>
+                    <select id="cum_panel_theme" class="text_pole">
+                        <option value="system">ตามธีม SillyTavern</option>
+                        <option value="rose">ชมพูกุหลาบ</option>
+                        <option value="violet">ม่วง</option>
+                        <option value="blue">ฟ้า</option>
+                        <option value="mint">มินต์</option>
+                        <option value="amber">อำพัน</option>
+                        <option value="custom">กำหนดเอง</option>
+                    </select>
+                </label>
+                <label id="cum_panel_custom_wrap" class="cum-field cum-panel-custom" for="cum_panel_custom" hidden>
+                    <span>สีที่กำหนดเอง</span>
+                    <input id="cum_panel_custom" type="color" />
+                </label>
+            </section>
+
             <section class="cum-settings-card cum-context-size-card" aria-labelledby="cum-context-size-title">
                 <div class="cum-section-heading">
                     <div>
